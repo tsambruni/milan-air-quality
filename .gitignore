@@ -4,3 +4,7 @@
 airflow_settings.yaml
 __pycache__/
 astro
+dags/example_dag_*
+.dockerignore
+.airflowignore
+astro_README.md
