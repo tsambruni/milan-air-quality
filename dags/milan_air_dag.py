@@ -1,14 +1,15 @@
 from airflow.decorators import dag, task
-from airflow.operators.empty import EmptyOperator
-from datetime import datetime
+from airflow.providers.google.cloud.transfers.local_to_gcs import LocalFilesystemToGCSOperator
 import pandas as pd
+import pendulum
 # import requests
 # import json
 
 
 @dag(
-        start_date=datetime(2023, 1, 1),
+        start_date=pendulum.local(2023, 1, 1),
         schedule=None,
+        catchup=False,
         tags=["project", "gcp"]
         )
 def milan_air_dag():
@@ -17,7 +18,7 @@ def milan_air_dag():
     """
 
     @task()
-    def get_daily_data() -> str:
+    def get_daily_data(local_filename: str = "air_quality.parquet") -> str:
         """
         Gets City of Milan's 2023 air quality data.\n
         Data is shown for working days only and includes historical
@@ -29,12 +30,11 @@ def milan_air_dag():
         df = pd.read_json(url)
         df['data'] = pd.to_datetime(df['data'])
         df['inquinante'] = df['inquinante'].astype(str)
-        local_path = './data/air_quality.parquet'
-        df.to_parquet(local_path, index=False)
-        return local_path
+        df.to_parquet(f"./data/{local_filename}", index=False)
+        return local_filename
 
     @task()
-    def get_station_data() -> str:
+    def get_station_data(local_filename: str = "stations.parquet") -> str:
         """
         Gets air quality stations.\n
         Info url: https://dati.comune.milano.it/dataset/ds409-rilevazione-qualita-aria-2023\n
@@ -47,28 +47,28 @@ def milan_air_dag():
         df['LONG_X_4326'] = df['LONG_X_4326'].astype(str)
         df['LAT_Y_4326'] = df['LAT_Y_4326'].astype(str)
         df = df.drop(columns='Location')
-        local_path = './data/stations.parquet'
-        df.to_parquet(local_path, index=False)
-        return local_path
+        df.to_parquet(f"./data/{local_filename}", index=False)
+        return local_filename
 
     @task()
-    def load_to_datalake(path: str) -> None:
+    def load_to_dwh() -> None:
         """
         Loads parquet file to data lake (Google Cloud Storage)
         """
-        return None
+        pass
 
-    @task()
-    def load_to_dwh(path: str) -> None:
-        """
-        Loads parquet file to data lake (Google Cloud Storage)
-        """
-        return None
+    daily = get_daily_data()
+    stations = get_station_data()
 
-    daily_path = get_daily_data()
-    stations_path = get_station_data()
-    status = load_to_datalake([daily_path, stations_path])
-    load_to_dwh(status)
+    load_to_datalake = LocalFilesystemToGCSOperator(
+        gcp_conn_id="gcp-connection",
+        task_id="load_to_datalake",
+        src="/usr/local/airflow/data/*",
+        dst="",
+        bucket="milan-air-data-bucket"
+    )
+
+    [daily, stations] >> load_to_datalake >> load_to_dwh()
 
 
 milan_air_dag()
