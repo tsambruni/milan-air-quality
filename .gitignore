@@ -9,3 +9,5 @@ dags/example_dag_*
 .dockerignore
 .airflowignore
 astro_README.md
+dags/_milan_air_dag.py
+.vscode/
