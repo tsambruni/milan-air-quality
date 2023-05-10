@@ -1,4 +1,5 @@
 from airflow.decorators import dag, task
+from airflow.utils.task_group import TaskGroup
 from airflow.providers.google.cloud.transfers.local_to_gcs import LocalFilesystemToGCSOperator
 from airflow.providers.google.cloud.transfers.gcs_to_bigquery import GCSToBigQueryOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
@@ -98,31 +99,32 @@ def milan_air_dag():
         bucket=BUCKET_ID,
     )
 
-    # Requires an operator for every load task, as it's not possible to map
-    # multiple files to different tables at once
-    load_to_dwh_daily = GCSToBigQueryOperator(
-        gcp_conn_id=GCP_CONN_ID,
-        task_id="load_to_dwh_daily",
-        source_objects=f"staging/{today}_air_quality.parquet",
-        destination_project_dataset_table="air_quality_data.raw_air_quality",
-        source_format="PARQUET",
-        autodetect=True,
-        create_disposition="CREATE_IF_NEEDED",
-        write_disposition="WRITE_TRUNCATE",
-        bucket=BUCKET_ID,
-    )
+    with TaskGroup(group_id='load_to_dwh') as load_to_dwh:
+        # Requires an operator for every load task, as it's not possible to map
+        # multiple files to different tables at once
+        GCSToBigQueryOperator(
+            gcp_conn_id=GCP_CONN_ID,
+            task_id="raw_air_quality",
+            source_objects=f"staging/{today}_air_quality.parquet",
+            destination_project_dataset_table="air_quality_data.raw_air_quality",
+            source_format="PARQUET",
+            autodetect=True,
+            create_disposition="CREATE_IF_NEEDED",
+            write_disposition="WRITE_TRUNCATE",
+            bucket=BUCKET_ID,
+        )
 
-    load_to_dwh_stations = GCSToBigQueryOperator(
-        gcp_conn_id=GCP_CONN_ID,
-        task_id="load_to_dwh_stations",
-        source_objects=f"staging/{today}_stations.parquet",
-        destination_project_dataset_table="air_quality_data.raw_stations",
-        source_format="PARQUET",
-        autodetect=True,
-        create_disposition="CREATE_IF_NEEDED",
-        write_disposition="WRITE_TRUNCATE",
-        bucket=BUCKET_ID,
-    )
+        GCSToBigQueryOperator(
+            gcp_conn_id=GCP_CONN_ID,
+            task_id="raw_stations",
+            source_objects=f"staging/{today}_stations.parquet",
+            destination_project_dataset_table="air_quality_data.raw_stations",
+            source_format="PARQUET",
+            autodetect=True,
+            create_disposition="CREATE_IF_NEEDED",
+            write_disposition="WRITE_TRUNCATE",
+            bucket=BUCKET_ID,
+        )
 
     trigger_dbt_dag = TriggerDagRunOperator(
         task_id="trigger_dbt_dag",
@@ -130,12 +132,13 @@ def milan_air_dag():
         wait_for_completion=False
     )
 
+    # Flow definition
     (
         extract_data()
         >> load_raw_data
         >> transform_data()
         >> load_staging_data
-        >> [load_to_dwh_daily, load_to_dwh_stations]
+        >> load_to_dwh
         >> trigger_dbt_dag
     )
 
