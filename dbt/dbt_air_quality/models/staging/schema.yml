@@ -1,0 +1,63 @@
+version: 2
+
+models:
+  - name: stg_air_quality
+    description: Table includes daily recorded pollutant values for active stations
+
+    columns:
+      - name: station_id
+        description: Unique identifier for a station
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              to: ref('stg_stations')
+              field: station_id
+
+      - name: date
+        description: Date of detected values
+        tests:
+          - not_null
+
+      - name: pollutant.pollutant
+        description: Pollutant identifier
+        tests:
+          - not_null
+
+      - name: pollutant.level
+        description: Detected level
+
+  - name: stg_stations
+    description: Master data table including active and inactive air quality stations
+
+    columns:
+      - name: stations_id
+        description: Unique identifier for a stations
+        tests:
+          - unique
+          - not_null
+
+      - name: location
+        description: Station's street/road 
+        tests:
+          - not_null
+
+      - name: geopoint
+        description: Stations's coordinates (geography dim)
+        tests:
+          - not_null
+
+      - name: active_from
+        description: Date since station is working
+        tests:
+          - not_null
+
+      - name: active_to
+        description: Date up to station worked/will work
+        tests:
+          - not_null
+
+      - name: pollutant
+        description: Pollutant identifier
+        tests:
+          - not_null

@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: joined_data
+    description: Final incremental table for analysis
+
+    columns:
+      - name: date
+        description: Date of detected values
+        tests:
+          - not_null
+
+      - name: station_id
+        description: Unique identifier for a station
+        tests:
+          - unique
+          - not_null
+
+      - name: location
+        description: Station's street/road 
+        tests:
+          - not_null
+
+      - name: geopoint
+        description: Stations's coordinates (geography dim)
+        tests:
+          - not_null
+      
+      - name: pollutant.pollutant
+        description: Pollutant identifier
+        tests:
+          - not_null
+
+      - name: pollutant.level
+        description: Detected level
